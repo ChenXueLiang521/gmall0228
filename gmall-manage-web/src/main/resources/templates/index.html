@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <head>
+        <!--使用easyUI必须引入Js，css-->
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+        <title>主界面</title>
+        <script type="text/javascript" src="/easyui/jquery.min.js"></script>
+        <script type="text/javascript" src="/easyui/jquery.easyui.min.js"></script>
+        <script type="text/javascript" src="/easyui/easyloader.js"></script>
+        <link rel="stylesheet" type="text/css" href="/easyui/themes/icon.css">
+        <link rel="stylesheet" type="text/css"  href="/easyui/themes/default/easyui.css">
+    </head>
+
+    <!--引入图片上传工具webuploader-->
+    <link rel="stylesheet" type="text/css" href="/webuploader/webuploader.css">
+    <script type="text/javascript" src="/webuploader/webuploader.js"></script>
+    <script src="/easyui/datagrid-detailview.js"></script>
+
+</head>
+<body class="easyui-layout">
+    <div data-options="region:'north',title:'头部',split:true" style="height:100px;">
+        <h1> 后台管理 </h1>
+    </div>
+    <div data-options="region:'south',title:'底部',split:true" style="height:100px;">
+        <h1>底部 </h1>
+    </div>
+    <div data-options="region:'west',title:'左部',split:true" style="width:200px;">
+        <!--添加手风琴菜单-->
+        <div data-options="region:'west',title:'左部',split:true" style="width:200px;">
+            <div class="easyui-accordion" style="overflow:auto;">
+                <div title="基本信息管理">
+                        <ul class="nav">
+                            <li><a href="javascript:add_tab('平台属性管理','attrListPage')" style="text-decoration:none;">平台属性管理</a></li>
+                        </ul>
+                </div>
+                <div title="商品信息管理">
+                    <ul class="nav">
+                        <li><a href="javascript:add_tab('商品信息管理','spuListPage')" style="text-decoration:none;">商品SPU管理</a></li>
+                    </ul>
+                </div>
+                <div title="广告管理">
+                    <h1>广告管理</h1>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div data-options="region:'center',title:'中部'"  >
+        <div id="tt" class="easyui-tabs" style="width:100%;height:100%;" >
+        </div>
+    </div>
+
+</body>
+
+<script type="text/javascript">
+    function add_tab(title,url){
+        if($("#tt").tabs('exists',title)){
+            $("#tt").tabs('select',title);
+        }else{
+            $("#tt").tabs('add',{
+                title:title,
+                href:url,
+                closable:true
+            });
+        }
+    }
+</script>
+</html>
