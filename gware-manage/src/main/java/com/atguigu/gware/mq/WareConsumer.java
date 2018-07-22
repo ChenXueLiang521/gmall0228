@@ -1,32 +1,27 @@
 package com.atguigu.gware.mq;
 
 import com.alibaba.fastjson.JSON;
-
 import com.atguigu.gware.bean.WareOrderTask;
+import com.atguigu.gware.config.ActiveMQUtil;
 import com.atguigu.gware.enums.TaskStatus;
 import com.atguigu.gware.mapper.WareOrderTaskDetailMapper;
 import com.atguigu.gware.mapper.WareOrderTaskMapper;
 import com.atguigu.gware.mapper.WareSkuMapper;
 import com.atguigu.gware.service.GwareService;
-
-import com.atguigu.gware.config.ActiveMQUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jms.annotation.JmsListener;
 import org.springframework.jms.core.JmsTemplate;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
 
 import javax.jms.JMSException;
-import javax.jms.MapMessage;
 import javax.jms.TextMessage;
-import java.util.*;
+import java.util.List;
 
 /**
  * @param
  * @return
  */
-
+@Component
 public class WareConsumer {
 
 

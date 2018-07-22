@@ -3,6 +3,7 @@ package com.atguigu.gware.service;
 import com.atguigu.gware.bean.WareInfo;
 import com.atguigu.gware.bean.WareOrderTask;
 import com.atguigu.gware.bean.WareSku;
+import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
@@ -11,6 +12,7 @@ import java.util.Map;
  * @param
  * @return
  */
+@Component
 public interface GwareService {
     public Integer  getStockBySkuId(String skuid);
 

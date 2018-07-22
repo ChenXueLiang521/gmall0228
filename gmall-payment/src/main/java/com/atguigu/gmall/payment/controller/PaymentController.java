@@ -93,6 +93,9 @@ public class PaymentController {
             e.printStackTrace();
         }
         response.setContentType("text/html;charset=UTF-8");
+        //调用sendDelayPaymentResult 方法
+        paymentService.sendDelayPaymentResult(orderInfo.getOutTradeNo(),15,3);
+
         return form;
     }
 
@@ -114,21 +117,31 @@ public class PaymentController {
             if ("TRADE_SUCCESS".equals(trade_status) || "TRADE_FINISHED".equals(trade_status)){
 
                 // 如果当前订单已经付款！则该次支付，失败！
-                // paymentInfo.paymentStatus
-
-
                 // 修改订单，支付的状态！
                 // 根据trade_no 去修改
                 String out_trade_no = paramMap.get("out_trade_no");
                 PaymentInfo paymentInfo = new PaymentInfo();
-                // 设置状态
-                paymentInfo.setPaymentStatus(PaymentStatus.PAID);
-                // 设置创建时间
-                paymentInfo.setCallbackTime(new Date());
-                // 设置内容
-                paymentInfo.setCallbackContent(paramMap.toString());
-                paymentService.updatePaymentInfo(paymentInfo,out_trade_no);
-                return "success";
+                //根据out_tradeNo找到paymentInfo对象，拿到状态
+                paymentInfo.setOutTradeNo(out_trade_no);
+                PaymentInfo paymentInfoHas = paymentService.getpaymentInfo(paymentInfo);
+                if (paymentInfo.getPaymentStatus()==PaymentStatus.ClOSED || paymentInfo.getPaymentStatus()==PaymentStatus.PAID){
+                    return "fail";
+                }else {
+                    //修改订单状态  根据trade_no 修改
+                    // 设置状态
+                    PaymentInfo paymentInfoUpd = new PaymentInfo();
+                    paymentInfoUpd.setPaymentStatus(PaymentStatus.PAID);
+                    // 设置创建时间
+                    paymentInfoUpd.setCallbackTime(new Date());
+                    // 设置内容
+                    paymentInfoUpd.setCallbackContent(paramMap.toString());
+                    paymentService.updatePaymentInfo(paymentInfoUpd,out_trade_no);
+                    //发送信息给订单，修改订单状态
+                    paymentService.sendPaymentResult(paymentInfoUpd,"success");
+
+                    return "success";
+                }
+
             }else {
                 return "fail";
             }
@@ -136,4 +149,28 @@ public class PaymentController {
             return "fail";
         }
     }
+
+
+
+    // 发送验证
+    @RequestMapping("sendPaymentResult")
+    @ResponseBody
+    public String sendPaymentResult(PaymentInfo paymentInfo,@RequestParam("result") String result){
+        paymentService.sendPaymentResult(paymentInfo,result);
+        return "sent payment result";
+    }
+
+    //查询订单信息
+    @RequestMapping("queryPaymentResult")
+    @ResponseBody
+    public String queryPaymentResult(HttpServletRequest request) throws AlipayApiException {
+        String orderId = request.getParameter("orderId");
+        PaymentInfo paymentInfoQuery = new PaymentInfo();
+        paymentInfoQuery.setOrderId(orderId);
+
+        boolean flag = paymentService.checkPayment(paymentInfoQuery);
+        return ""+flag;
+    }
+
+
 }
