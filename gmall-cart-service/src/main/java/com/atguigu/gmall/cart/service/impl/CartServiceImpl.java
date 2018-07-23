@@ -20,50 +20,55 @@ public class CartServiceImpl implements CartService {
 
     @Autowired
     private CartInfoMapper cartInfoMapper;
+
     @Autowired
     private RedisUtil redisUtil;
+    // 需要调用getSkuInfo(userId)
+
     @Reference
     private ManageService manageService;
 
     @Override
     public void addToCart(String skuId, String userId, Integer skuNum) {
-        //根据skuId查找商品信息
-        SkuInfo skuInfo = manageService.getSkuInfo(skuId);
-        //查看购物车cartInfo中是否有该商品
+        // 查看购物车CartInfo中是否有该商品
         CartInfo cartInfoQuery = new CartInfo();
         cartInfoQuery.setSkuId(skuId);
         cartInfoQuery.setUserId(userId);
 
-        CartInfo cartInfoExist = cartInfoMapper.selectOne(cartInfoQuery);
-        if (cartInfoExist!=null){
+        CartInfo cartInfoExist  = cartInfoMapper.selectOne(cartInfoQuery);
+        if (cartInfoExist !=null){
             cartInfoExist.setSkuNum(cartInfoExist.getSkuNum()+skuNum);
             cartInfoMapper.updateByPrimaryKeySelective(cartInfoExist);
-            //更改添加都需要放入缓存
-        }else {
-            //没有创建购物车的话
+            // 更改也需要变动缓存
+        }else{
+            // 没有创建购物车
+            // 根据skuId 查找商品信息
+            SkuInfo skuInfo = manageService.getSkuInfo(skuId);
             CartInfo cartInfo = new CartInfo();
             cartInfo.setSkuId(skuId);
             cartInfo.setUserId(userId);
             cartInfo.setSkuNum(skuNum);
-            cartInfo.setImgUrl(skuInfo.getSkuDefaultImg());
             cartInfo.setSkuName(skuInfo.getSkuName());
-            //实时价格
+            // 实施价格
             cartInfo.setSkuPrice(skuInfo.getPrice());
-            //加购物车的价格
+            // 添加购物车时候的价格
             cartInfo.setCartPrice(skuInfo.getPrice());
-            //新插入的购物车也需要放入缓存
+            cartInfo.setImgUrl(skuInfo.getSkuDefaultImg());
+            // 新添加的购物车插入的时候，也需要插入缓存
             cartInfoMapper.insertSelective(cartInfo);
-            //将插入的信息给 已经存下的购物车对象
+            // 将插入的信息也给已经存在的购物车对象
             cartInfoExist=cartInfo;
+
         }
-        //将购物车放入redis中 user:userId:cart
+        // 想办法将购物车数据放到redis中
+        // hset(key,field,value) :key = （user:userId:cart）
         String userCartKey = CartConst.USER_KEY_PREFIX+userId+CartConst.USER_CART_KEY_SUFFIX;
-        //获取redis对象
+        // 获取redis对象
         Jedis jedis = redisUtil.getJedis();
-        //保存数据
-        String cartJson = JSON.toJSONString(cartInfoExist);
-        jedis.hset(userCartKey,skuId,cartJson);
-        //更新购物车过期时间  user:userId:info
+        // 保存的数据
+        String cartJson  = JSON.toJSONString(cartInfoExist);
+        jedis.hset(userCartKey,skuId,cartJson );
+        // 细节的地方！user:userId+:info
         String userInfoKey = CartConst.USER_KEY_PREFIX+userId+CartConst.USERINFOKEY_SUFFIX;
         Long ttl = jedis.ttl(userInfoKey);
         jedis.expire(userCartKey,ttl.intValue());
@@ -72,73 +77,72 @@ public class CartServiceImpl implements CartService {
 
     @Override
     public List<CartInfo> getCartList(String userId) {
-        //看缓存 看数据
-        //缓存key
+        // 看缓存，数据库！   缓存key
         String userCartKey = CartConst.USER_KEY_PREFIX+userId+CartConst.USER_CART_KEY_SUFFIX;
-        //创建redis对象
+        // 创建redis对象 hset(key,field,value); hget(key,field) hget(userCartKey , skuId);
         Jedis jedis = redisUtil.getJedis();
-        //reids--hash 对应  Java-List
-        List<String> cartJsons = jedis.hvals(userCartKey);
-        //循环
-        if (cartJsons!=null && "".equals(cartJsons)){
+        // redis=hash --- java=list;
+        List<String> cartJsons  = jedis.hvals(userCartKey);
+        // 循环
+        // 准备一个新的集合：
+        if (cartJsons!=null && !"".equals(cartJsons)){
             List<CartInfo> cartInfoList = new ArrayList<>();
-            for (String cartJson : cartJsons){
-                //将对象转换成cartInfo对象
+            for (String cartJson : cartJsons) {
+                // 将对象转换成cartInfo对象
                 CartInfo cartInfo = JSON.parseObject(cartJson, CartInfo.class);
                 cartInfoList.add(cartInfo);
             }
-            //根据id进行排序
+            // hash 有顺序么？ 根据id进行排序 time 外部比较器
             cartInfoList.sort(new Comparator<CartInfo>() {
                 @Override
                 public int compare(CartInfo o1, CartInfo o2) {
-
                     return o1.getId().compareTo(o2.getId());
                 }
             });
             return cartInfoList;
         }else {
-            //走数据库  验价过程  从数据库读取到缓存
+            // 走数据库，验价过程！ sku_Info 中的price ，car_Info cartprice ,将数据库中的数据放入缓存
             List<CartInfo> cartInfoList = loadCartCache(userId);
             return  cartInfoList;
-        }
 
+        }
 
     }
 
     @Override
     public List<CartInfo> mergeToCartList(List<CartInfo> cartListFromCookie, String userId) {
-        //循环判断
+        // 循环判断
         List<CartInfo> cartInfoListDB = cartInfoMapper.selectCartListWithCarPrice(userId);
         for (CartInfo cartInfoCK : cartListFromCookie) {
+            // 有相同的，没有相同[insert]
             boolean isMatch = false;
             for (CartInfo infoDB : cartInfoListDB) {
-                //如果skuId相同，则说明是同一件商品 数据加一
+                // 如果skuId 相同，则说明是同一个商品，则数据要增加
                 if (cartInfoCK.getSkuId().equals(infoDB.getSkuId())){
                     infoDB.setSkuNum(cartInfoCK.getSkuNum()+infoDB.getSkuNum());
-                //更新
                     cartInfoMapper.updateByPrimaryKeySelective(infoDB);
-                    isMatch = true;
+                    isMatch=true;
                 }
-
             }
-            //插入信息
-            if(!isMatch){
-                //userid赋值
+            // 插入信息
+            if (!isMatch){
+                // userId 赋值
                 cartInfoCK.setUserId(userId);
                 cartInfoMapper.insertSelective(cartInfoCK);
             }
         }
+        // loadCartCache ： 根据userId 先查数据库，在放缓存
         List<CartInfo> cartInfoList = loadCartCache(userId);
-        //需要跟cookie中的数据进行匹配 根据skuId，并且isChecked=“1” 从新更新数据库
+        // 需要跟cookie中的数据就行匹配：{isChecked} ,根据skuId 。并且 isChecked = “1”;从新更新数据库！
         for (CartInfo cartInfo : cartInfoList) {
             for (CartInfo info : cartListFromCookie) {
-                //找skuId
+                // 找skuId
                 if (cartInfo.getSkuId().equals(info.getSkuId())){
-                    //并且isChecked为1
+                    // 并且isChecked 为 1
                     if ("1".equals(info.getIsChecked())){
-                        cartInfo.setIsChecked(info.getIsChecked());
-                        //更新到redis中
-                        checkCart(cartInfo.getSkuId(),info.getIsChecked(),userId);
+                        // 将数据从新更新，redis
+                        cartInfo.setIsChecked("1");
+                        checkCart(userId,cartInfo.getSkuId(),info.getIsChecked());
                     }
                 }
             }
@@ -148,36 +152,36 @@ public class CartServiceImpl implements CartService {
 
     @Override
     public void checkCart(String userId, String skuId, String isChecked) {
-        //取出redis数据  定义key
+        // 取出redis 数据  定义key
         String userCartKey = CartConst.USER_KEY_PREFIX+userId+CartConst.USER_CART_KEY_SUFFIX;
         Jedis jedis = redisUtil.getJedis();
-        //hset:因为skuId 是唯一的
+        // hget:因为skuId 是唯一的！
         String cartInfoJson = jedis.hget(userCartKey, skuId);
-        //将字符串转换为对象
+        // 将字符串转换成对象
         CartInfo cartInfo = JSON.parseObject(cartInfoJson, CartInfo.class);
-        //对该对象进行状态修改
+        // 对该对象进行修改状态
         cartInfo.setIsChecked(isChecked);
-        //将修改后的数据存到redis中
+        // 将修改后的数据存入redis
         jedis.hset(userCartKey,skuId,JSON.toJSONString(cartInfo));
-        //将所有选中的商品保存到一个新的key中
-         String cartIsCheckKey = CartConst.USER_KEY_PREFIX+userId+CartConst.USER_CHECKED_KEY_SUFFIX;
-         //将数据存到redis当中  isChecked等1是创建   0删除
+        // 将所有选中的商品保存到一个新的key中
+        String cartIsCheckKey = CartConst.USER_KEY_PREFIX+userId+CartConst.USER_CHECKED_KEY_SUFFIX;
+        // 将数据放入redis,当 isChecked 为 1 时创建，0删除
         if ("1".equals(isChecked)){
             jedis.hset(cartIsCheckKey,skuId,JSON.toJSONString(cartInfo));
         }else {
-           jedis.hdel(cartIsCheckKey,skuId);
+            jedis.hdel(cartIsCheckKey,skuId);
         }
-
     }
 
     @Override
     public List<CartInfo> getCartCheckedList(String userId) {
-        //定义key 创建redis对象
+
+        // 定义key，创建redis对象
         String userCheckedKey = CartConst.USER_KEY_PREFIX+userId+CartConst.USER_CHECKED_KEY_SUFFIX;
         Jedis jedis = redisUtil.getJedis();
-        List<String> cartCheckedList = jedis.hvals(userCheckedKey);
-        //将字符串转换成对象
-        //创建一个对象
+        List<String> cartCheckedList  = jedis.hvals(userCheckedKey);
+        // 将字符串集合转换成对象 ,
+        // 创建一个集合
         List<CartInfo> cartInfoList = new ArrayList<>();
         for (String cartJson : cartCheckedList) {
             CartInfo cartInfo = JSON.parseObject(cartJson, CartInfo.class);
@@ -186,24 +190,23 @@ public class CartServiceImpl implements CartService {
         return cartInfoList;
     }
 
-
     private List<CartInfo> loadCartCache(String userId) {
-        //调用mapper
-        List<CartInfo> cartInfoList =  cartInfoMapper.selectCartListWithCarPrice(userId);
-        //判断集合
+        // 在mapper中写个方法，
+        List<CartInfo> cartInfoList = cartInfoMapper.selectCartListWithCarPrice(userId);
+        //  判断集合
         if (cartInfoList!=null && cartInfoList.size()>0){
-            //准备redis
+            // 准备放入redis
             Jedis jedis = redisUtil.getJedis();
-            //对数据进行转换
+            // 对数据进行转换 hset(key,field,value);
             String userCartKey = CartConst.USER_KEY_PREFIX+userId+CartConst.USER_CART_KEY_SUFFIX;
-            //创建map 
+            // field，value === 正好对应上我们的map.put(field,value) jedis.hmset(userCartKey,map);
             Map<String,String> map = new HashMap<>(cartInfoList.size());
             for (CartInfo cartInfo : cartInfoList) {
-            //将cartInfo转换成对象
-                String cartJson = JSON.toJSONString(cartInfo);
+                // 将cartInfo 转换成对象
+                String cartJson  = JSON.toJSONString(cartInfo);
                 map.put(cartInfo.getSkuId(),cartJson);
             }
-            //往redis中添加数据
+            // 往redis 中添加数据
             jedis.hmset(userCartKey,map);
             jedis.close();
         }

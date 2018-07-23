@@ -42,5 +42,4 @@ public class OrderConsumer {
             orderService.updateOrderStatus(orderId,ProcessStatus.STOCK_EXCEPTION);
         }
     }
-
 }

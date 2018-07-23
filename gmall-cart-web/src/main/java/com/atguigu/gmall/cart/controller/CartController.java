@@ -104,7 +104,7 @@ public class CartController {
 
 
     @RequestMapping("toTrade")
-    @LoginRequire(autoRedirect = false)
+    @LoginRequire(autoRedirect = true )
     public String toTrade(HttpServletRequest request,HttpServletResponse response){
         //取得userId
         String userId = (String) request.getAttribute("userId");
